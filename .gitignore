@@ -23,3 +23,12 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# All state/reports live in the private data repo cloned at output/
+# (public code repo must never track it)
+output/

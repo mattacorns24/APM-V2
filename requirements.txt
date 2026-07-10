@@ -1,0 +1,4 @@
+yfinance>=0.2.50
+pydantic>=2.7
+alpaca-py>=0.33
+python-dotenv>=1.0
