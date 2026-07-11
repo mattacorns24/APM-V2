@@ -27,11 +27,17 @@ SWAP_MARGIN = 1.2
 # trailing stop fires. Fresh /research resets the clock immediately.
 COOLDOWN_DAYS = 30
 
-# Midday review — PLACEHOLDER thresholds, informational flags only.
-# The trim/cut ruleset is not yet defined; nothing trades until this is True.
-MIDDAY_RULES_ENABLED = False
-FLAG_TRIM_GAIN_PCT = 25.0    # flag would_trim when unrealized gain >= this
-FLAG_CUT_LOSS_PCT = -10.0    # flag would_cut when unrealized P&L <= this
+# Midday strategy: trim losers, tighten winner stops (user-approved ruleset).
+MIDDAY_RULES_ENABLED = True
+# Loser ladder: (P&L% vs avg entry, fraction of current qty to sell).
+# Each step fires once per position, ever. Trailing stop stays = final exit.
+LOSER_TRIM_STEPS = [(-5.0, 0.25), (-8.0, 0.50)]
+# Winner ratchet: (gain% threshold, multiplier applied to current trail).
+# Ratchet-only — a stop never loosens. Highest crossed step wins.
+WINNER_TIGHTEN_STEPS = [(15.0, 0.75), (30.0, 0.50)]
+TRAIL_FLOOR = 4.0            # trail % never tightens below this
+MAX_MIDDAY_ACTIONS = 3       # per run, worst offenders first
+DUST_WEIGHT = 0.02           # trim leaving < this weight -> close entirely (cooldown)
 
 # Weekly grade: outcome vs SPY (60%) + process discipline (40%)
 GRADE_OUTCOME_WEIGHT = 0.6

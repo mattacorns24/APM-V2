@@ -24,14 +24,24 @@ def tickers() -> set[str]:
 
 def add(entries: list[dict]) -> None:
     """Add scored ideas to the watchlist. Dedupes by ticker, keeping the
-    newest entry. Fresh research resets status to 'watch' (clears cooldown)."""
+    newest entry. Fresh research resets status to 'watch' (clears cooldown) —
+    unless the position is currently held, whose status and midday-action
+    history must survive re-research."""
     existing = {e["ticker"]: e for e in load()}
     today = date.today().isoformat()
     for entry in entries:
+        prior = existing.get(entry["ticker"], {})
+        carried = {}
+        if prior.get("status") == "held":
+            carried = {
+                "status": "held",
+                **{k: prior[k] for k in ("midday_steps", "last_midday_action") if k in prior},
+            }
         existing[entry["ticker"]] = {
             "status": "watch",
             **entry,
             "date": entry.get("date", today),
+            **carried,
         }
     _save(list(existing.values()))
 
@@ -46,6 +56,25 @@ def set_status(ticker: str, status: str) -> None:
                 e["stopped_at"] = date.today().isoformat()
             else:
                 e.pop("stopped_at", None)
+    _save(entries)
+
+
+def midday_history(ticker: str) -> dict:
+    """Midday-action history for a ticker: {'steps': [...], 'last_action': iso|None}."""
+    for e in load():
+        if e["ticker"] == ticker:
+            return {"steps": e.get("midday_steps", []),
+                    "last_action": e.get("last_midday_action")}
+    return {"steps": [], "last_action": None}
+
+
+def record_midday_step(ticker: str, step: str) -> None:
+    """Append a fired midday step (e.g. 'trim_-5', 'tighten_15') and stamp today."""
+    entries = load()
+    for e in entries:
+        if e["ticker"] == ticker:
+            e.setdefault("midday_steps", []).append(step)
+            e["last_midday_action"] = date.today().isoformat()
     _save(entries)
 
 

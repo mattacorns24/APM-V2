@@ -64,7 +64,7 @@ Five scheduled cloud Claude Code sessions execute the workflow files in `routine
 |---|---|---|
 | 7:00 | `premarket.md` | Research + score 3-5 new ideas (/research flow) |
 | 9:30 | `market_open.md` | Size + place paper trades (/allocate flow) |
-| 12:30 | `midday.md` | Position review — **report-only**; trim/cut ruleset TBD (`MIDDAY_RULES_ENABLED=False`) |
+| 12:30 | `midday.md` | Trim losers (−5% → 25%, −8% → 50% of rest, once each), tighten winner stops (+15% → ×0.75, +30% → ×0.5, floor 4%, ratchet-only). Guardrails: skip same-day buys, 1 action/position/day, max 3/run, trim below 2% weight → close + cooldown |
 | 16:00 | `eod.md` | Daily recap (`portfolio/snapshot.py`) |
 | 16:30 Fri | `weekly.md` | Week review + grade (`portfolio/grade.py`: 60% vs SPY, 40% process) |
 
