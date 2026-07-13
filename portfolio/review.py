@@ -112,7 +112,7 @@ def main() -> None:
         from . import broker
 
         todays_buys = {o.symbol for o in broker.todays_filled_orders()
-                       if str(o.side).endswith("buy")}
+                       if str(o.side).split(".")[-1].lower() == "buy"}
     except RuntimeError as e:
         sys.exit(str(e))
 
