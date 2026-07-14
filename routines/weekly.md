@@ -12,18 +12,25 @@ Week-in-review with a letter grade. No trading in this routine.
    return vs SPY. Process (40%): stops on every position, cash reserve intact,
    no cooldown violations, all research had targets. **The grade comes from this
    CLI — never assign your own.**
-2. Read the week's daily material: each day's `eod_recap.md`, run summaries, and
+2. `python -m research.tracking analyze` — conviction-cutoff sweep over every
+   shadow-tracked scored ticker (avg alpha vs SPY + win rate above each candidate
+   cutoff at 30/60/90 days). Report-only — **never change the live entry cutoff
+   yourself**; the report goes to `output/conviction_analysis.json`.
+3. Read the week's daily material: each day's `eod_recap.md`, run summaries, and
    `output/weekly/<ISO-week>-grade.json`.
-3. Write `output/weekly/<ISO-week>.md`:
+4. Write `output/weekly/<ISO-week>.md`:
    - **Grade: <letter> (<score>)** and one paragraph on why — connect the outcome
      and each failed/passed process check to what actually happened this week
    - Week P&L vs SPY (numbers from the grade JSON)
    - Best and worst positions of the week
    - Every buy, sell, and stop-out this week (from the daily recaps)
    - Process-check table (pass/fail + detail)
+   - **Conviction cutoff check**: the sweep's recommendation (or "insufficient
+     sample") and how it compares to the live entry cutoff — flag divergence,
+     don't act on it
    - **One lesson for next week** — a single concrete, checkable adjustment
      (e.g. "two skips for missing targets: premarket must always emit targets"),
      not a platitude
-4. Send summary via notify:
+5. Send summary via notify:
    `python -c "from portfolio import notify; notify.send('''<3 lines: grade / week vs SPY / lesson>''')"`
-5. Commit+push the data repo (message: `weekly <ISO-week>: grade <letter>`).
+6. Commit+push the data repo (message: `weekly <ISO-week>: grade <letter>`).

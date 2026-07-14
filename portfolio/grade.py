@@ -77,7 +77,12 @@ def process_checks() -> list[dict]:
         run_dir = rconfig.RUNS_DIR / (monday + timedelta(days=day_offset)).isoformat()
         if not run_dir.exists():
             continue
-        for scores_file in run_dir.glob("*.scores.json"):
+        for scores_file in sorted(run_dir.glob("*.json")):
+            # per-ticker research JSONs have uppercase stems (NVDA.json);
+            # ".scores.json" keeps pre-2026-07-14 run dirs gradable
+            if not (rconfig.TICKER_STEM_RE.fullmatch(scores_file.stem)
+                    or scores_file.name.endswith(".scores.json")):
+                continue
             try:
                 if "targets" not in json.loads(scores_file.read_text()):
                     untargeted.append(scores_file.name)

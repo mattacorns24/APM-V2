@@ -8,9 +8,12 @@ guard, commit+push, failure handling).
 Brief recap of the day's operations. No trading in this routine.
 
 1. `python -m portfolio.snapshot` — closing state.
-2. Read today's run dir (`output/runs/<date>/`): premarket summary, market-open
+2. `python -m research.tracking update` — fills due 30/60/90-day price horizons
+   for every scored ticker (conviction-cutoff tracking). Failed fetches retry
+   tomorrow automatically.
+3. Read today's run dir (`output/runs/<date>/`): premarket summary, market-open
    summary, midday review, execution/skip logs.
-3. Write `output/runs/<date>/eod_recap.md` — brief, human-readable:
+4. Write `output/runs/<date>/eod_recap.md` — brief, human-readable:
    - **Day P&L**: $ and % (from the snapshot), equity and cash
    - **Actions today**: researched tickers + convictions, buys/sells with fills,
      stop-outs detected (cooldown started)
@@ -19,7 +22,7 @@ Brief recap of the day's operations. No trading in this routine.
    - **Tomorrow's setup**: cooldowns ending soon, watchlist candidates that were
      skipped and why (e.g. "portfolio full", "no targets")
    - Keep it under ~40 lines. Recap, not analysis.
-4. Send the 3-line summary via notify:
+5. Send the 3-line summary via notify:
    `python -c "from portfolio import notify; notify.send('''<3 lines: day P&L / actions count / notable>''')"`
    (no-ops until the Discord webhook is configured — expected for now).
-5. Commit+push the data repo (message: `eod <date>: <day P&L>`).
+6. Commit+push the data repo (message: `eod <date>: <day P&L>`).

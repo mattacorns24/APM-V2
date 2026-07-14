@@ -4,16 +4,21 @@ Usage:
     python -m research.score NVDA [--run-dir output/runs/YYYY-MM-DD]
 
 Expects in the run dir:
-    <TICKER>.scores.json   — StockScores-shaped JSON (graded by the Claude Code session)
-    <TICKER>.notes.md      — research notes with citations
+    <TICKER>.json   — StockScores-shaped JSON + optional top-level "meta"
+                      (graded by the Claude Code session)
+    <TICKER>.md     — research notes with citations
 
-Writes:
-    <TICKER>.md            — final report
-    <TICKER>.json          — validated scores + conviction
+Updates both files in place:
+    <TICKER>.json   — adds top-level "conviction" (meta preserved)
+    <TICKER>.md     — rewritten as the full report; original notes preserved
+                      below config.NOTES_MARKER
 and appends the idea to output/watchlist.json.
 
+Re-running is safe/idempotent: conviction is stripped before re-validation and
+notes are extracted from below the marker, so output is a fixed point.
+
 Exits non-zero with readable validation errors so the session can fix the
-scores JSON and retry.
+JSON and retry.
 """
 
 import argparse
@@ -24,7 +29,7 @@ from datetime import date
 
 from pydantic import ValidationError
 
-from . import config, watchlist
+from . import config, tracking, watchlist
 from .schemas import StockScores
 
 
@@ -41,7 +46,10 @@ def compute_conviction(scores: StockScores) -> int:
     return max(0, min(100, math.floor(raw + 0.5)))
 
 
-def render_report(scores: StockScores, notes: str, conviction: int, meta: dict) -> str:
+def render_report(
+    scores: StockScores, notes: str, conviction: int, meta: dict,
+    report_date: str | None = None,
+) -> str:
     g, m, c, b = scores.growth, scores.moat, scores.catalysts, scores.bear
     growth_rows = "\n".join(
         f"| {q.quarter} | {q.revenue_yoy_pct if q.revenue_yoy_pct is not None else 'n/a'} | {q.source} |"
@@ -68,7 +76,7 @@ def render_report(scores: StockScores, notes: str, conviction: int, meta: dict) 
 
 **Thesis:** {meta.get('thesis', 'n/a')}
 **Source:** {meta.get('source', 'n/a')}
-**Date:** {date.today().isoformat()}
+**Date:** {report_date or date.today().isoformat()}
 
 **Verdict:** {scores.summary}
 
@@ -106,6 +114,7 @@ def render_report(scores: StockScores, notes: str, conviction: int, meta: dict) 
 
 # Full Research Notes
 
+{config.NOTES_MARKER}
 {notes}
 """
 
@@ -113,53 +122,86 @@ def render_report(scores: StockScores, notes: str, conviction: int, meta: dict) 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Score a researched stock")
     parser.add_argument("ticker")
+    parser.add_argument("--run-dir", default=None)
     parser.add_argument(
-        "--run-dir", default=str(config.RUNS_DIR / date.today().isoformat())
+        "--backtest-date", default=None, metavar="YYYY-MM-DD",
+        help="as-of scoring: record to the backtest tracking file, skip the watchlist",
     )
     args = parser.parse_args()
 
     from pathlib import Path
 
-    run_dir = Path(args.run_dir)
-    ticker = args.ticker.upper()
-    scores_path = run_dir / f"{ticker}.scores.json"
-    notes_path = run_dir / f"{ticker}.notes.md"
+    if args.backtest_date:
+        try:
+            date.fromisoformat(args.backtest_date)
+        except ValueError:
+            sys.exit(f"invalid --backtest-date: {args.backtest_date}")
 
-    for p in (scores_path, notes_path):
+    if args.run_dir:
+        run_dir = Path(args.run_dir)
+    elif args.backtest_date:
+        run_dir = config.backtest_dir(args.backtest_date)
+    else:
+        run_dir = config.RUNS_DIR / date.today().isoformat()
+    ticker = args.ticker.upper()
+    json_path = config.ticker_json_path(run_dir, ticker)
+    md_path = config.ticker_md_path(run_dir, ticker)
+
+    for p in (json_path, md_path):
         if not p.exists():
             sys.exit(f"missing input file: {p}")
 
-    raw = json.loads(scores_path.read_text())
+    raw = json.loads(json_path.read_text())
     meta = raw.pop("meta", {})  # optional: company, thesis, source
+    raw.pop("conviction", None)  # present on re-runs; recomputed below
     try:
         scores = StockScores(**raw)
     except ValidationError as e:
         sys.exit(f"scores JSON failed validation — fix and re-run:\n{e}")
 
     conviction = compute_conviction(scores)
-    notes = notes_path.read_text()
 
-    (run_dir / f"{ticker}.md").write_text(
-        render_report(scores, notes, conviction, meta)
+    # On re-runs the md is already a report; the original notes live below the
+    # marker. Fresh session-written notes have no marker — take the whole file.
+    md_text = md_path.read_text()
+    if config.NOTES_MARKER in md_text:
+        notes = md_text.split(config.NOTES_MARKER, 1)[1]
+    else:
+        notes = md_text
+    # normalize edge newlines so repeated runs are byte-identical
+    notes = notes.strip("\n")
+
+    report = render_report(scores, notes, conviction, meta, report_date=args.backtest_date)
+    json_path.write_text(
+        json.dumps({"conviction": conviction, "meta": meta, **scores.model_dump()}, indent=2)
     )
-    (run_dir / f"{ticker}.json").write_text(
-        json.dumps({"conviction": conviction, **scores.model_dump()}, indent=2)
-    )
-    watchlist.add(
-        [
-            {
-                "ticker": ticker,
-                "company": meta.get("company", ticker),
-                "thesis": meta.get("thesis", scores.summary),
-                "conviction": conviction,
-                "current_price": scores.targets.current,
-                "upside_pct": round(scores.upside_pct, 1),
-                "downside_pct": round(scores.downside_pct, 1),
-                "reward_risk": round(scores.reward_risk, 2),
-            }
-        ]
-    )
-    print(f"{ticker}: conviction {conviction}/100 — report at {run_dir / f'{ticker}.md'}")
+    md_path.write_text(report)
+    if args.backtest_date:
+        # backtests never touch the live watchlist or live tracking file
+        tracking.record(
+            ticker, conviction, scores.targets.current,
+            research_date=args.backtest_date,
+            path=config.backtest_tracking_path(args.backtest_date),
+        )
+        prefix = f"[backtest {args.backtest_date}] "
+    else:
+        watchlist.add(
+            [
+                {
+                    "ticker": ticker,
+                    "company": meta.get("company", ticker),
+                    "thesis": meta.get("thesis", scores.summary),
+                    "conviction": conviction,
+                    "current_price": scores.targets.current,
+                    "upside_pct": round(scores.upside_pct, 1),
+                    "downside_pct": round(scores.downside_pct, 1),
+                    "reward_risk": round(scores.reward_risk, 2),
+                }
+            ]
+        )
+        tracking.record(ticker, conviction, scores.targets.current)
+        prefix = ""
+    print(f"{prefix}{ticker}: conviction {conviction}/100 — report at {run_dir / f'{ticker}.md'}")
 
 
 if __name__ == "__main__":

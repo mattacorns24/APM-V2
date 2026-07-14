@@ -41,7 +41,7 @@ For each idea:
    - **Catalysts (next 12 months):** each with expected timing, judged REAL (material and underappreciated), HYPE (narrative without fundamental support), or ALREADY PRICED IN (reflected in valuation) — justify with evidence.
    - **Bear cases:** strongest arguments against, each with severity and best rebuttal. Be genuinely adversarial — this section protects capital.
    - **Price targets (12-month):** estimate bull / base / bear price targets anchored to valuation evidence (multiples vs peers and history, growth trajectory, analyst ranges as sanity check). `current` must be the fetch_data price. Must satisfy bear < base <= bull. Explain the derivation.
-3. Write `$RUN_DIR/TICKER.notes.md` — markdown sections: Growth Trend, Moat & Competitive Positioning, Catalysts (Next 12 Months), Bear Cases, Price Targets, Sources. Cite sources. If a number cannot be found, say so — never guess.
+3. Write `$RUN_DIR/TICKER.md` — markdown sections: Growth Trend, Moat & Competitive Positioning, Catalysts (Next 12 Months), Bear Cases, Price Targets, Sources. Cite sources. If a number cannot be found, say so — never guess. (`research.score` later rewrites this file into the final report with these notes preserved at the bottom.)
 
 ## Stage 3 — Grade and score
 
@@ -52,7 +52,7 @@ Grade subscores strictly from the notes and fetch_data numbers, per this rubric:
 - **catalysts.subscore (0-10):** weight REAL heavily, HYPE near zero, PRICED IN slightly positive at best. 9-10 = multiple real, underappreciated catalysts inside 12 months.
 - **bear.penalty (0-15):** 0-3 = bear cases weak or well-rebutted; 8-11 = at least one credible thesis-breaking risk; 12-15 = bear case stronger than the bull case.
 
-Write `$RUN_DIR/TICKER.scores.json` matching `research/schemas.py::StockScores` exactly, plus an optional top-level `"meta"` object (`company`, `thesis`, `source`) for the report header:
+Write `$RUN_DIR/TICKER.json` matching `research/schemas.py::StockScores` exactly, plus a top-level `"meta"` object (`company`, `thesis`, `source`) for the report header:
 
 ```json
 {
@@ -71,7 +71,7 @@ Write `$RUN_DIR/TICKER.scores.json` matching `research/schemas.py::StockScores` 
 }
 ```
 
-Then run: `python -m research.score TICKER` — it validates the JSON, computes the conviction (weighted rubric: growth 35% / moat 25% / catalysts 25%, minus bear penalty; max 85), writes `TICKER.md` + `TICKER.json`, and updates the watchlist. If validation fails, fix the scores JSON per the error and re-run. **Never compute or override the conviction number yourself.**
+Then run: `python -m research.score TICKER` — it validates the JSON, computes the conviction (weighted rubric: growth 35% / moat 25% / catalysts 25%, minus bear penalty; max 85), updates `TICKER.json` in place (adds top-level `"conviction"`), rewrites `TICKER.md` as the full report (header, score tables, your notes appended), and updates the watchlist. If validation fails, fix `TICKER.json` per the error and re-run — re-running is safe/idempotent. **Never compute or override the conviction number yourself.**
 
 ## Finish
 

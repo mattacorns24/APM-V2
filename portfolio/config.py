@@ -3,7 +3,9 @@
 from research.config import OUTPUT_DIR, RUNS_DIR  # noqa: F401 (shared paths)
 
 # Entry gate
-ENTRY_THRESHOLD = 45          # minimum conviction to be a candidate
+# 55 per 2026-04-15 backtest (output/backtest/2026-04-15/report.md): the 45-54
+# band underperformed; provisional until live tracking confirms (~20 entries)
+ENTRY_THRESHOLD = 55          # minimum conviction to be a candidate
 
 # Sizing: attractiveness = conviction * min(reward_risk, ATTRACT_RR_CAP);
 # weights proportional to attractiveness, clamped below.
