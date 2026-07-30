@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 
 from research import watchlist
 
-from . import broker, config
+from . import broker, config, trade_log
 
 
 def reconcile(live_symbols: set[str]) -> list[str]:
@@ -74,10 +74,17 @@ def main() -> None:
             watchlist.set_status(t, "watch")
         report["orders"].append({"ticker": t, "side": "sell", "qty": qty})
 
+    buys_left = trade_log.remaining_this_week()
+
     for a in buys:
         t, shares, trail = a["ticker"], a["est_shares"], a["trail_pct"]
         if not shares:
             print(f"SKIP {t}: no share count (missing current_price)")
+            continue
+        if buys_left <= 0:
+            print(f"SKIP {t}: weekly trade cap reached "
+                  f"({config.MAX_NEW_TRADES_PER_WEEK}/wk)")
+            report["orders"].append({"ticker": t, "side": "buy", "skipped": "weekly trade cap"})
             continue
         print(f"BUY  {t} x{shares} (~${a['dollars']:,.0f}, {a['weight']*100:.1f}%) "
               f"+ trailing stop {trail}%")
@@ -87,6 +94,7 @@ def main() -> None:
             filled_qty = int(float(filled.filled_qty))
             broker.trailing_stop(t, filled_qty, trail)
             watchlist.set_status(t, "held")
+            trade_log.record_buy(t, filled_qty, float(filled.filled_avg_price))
             report["orders"].append(
                 {"ticker": t, "side": "buy", "qty": filled_qty,
                  "avg_price": float(filled.filled_avg_price), "trail_pct": trail}
@@ -95,6 +103,7 @@ def main() -> None:
             report["orders"].append(
                 {"ticker": t, "side": "buy", "qty": shares, "trail_pct": trail}
             )
+        buys_left -= 1
 
     report_path = Path(args.run_dir) / "execution_report.json"
     report_path.write_text(json.dumps(report, indent=2))

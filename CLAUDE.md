@@ -50,7 +50,7 @@ Supporting: `schemas.py` (Pydantic models incl. 12-mo bull/base/bear price targe
 
 Deterministic Python, no LLM math — Alpaca **paper** account ($100k), long-only, whole shares:
 
-- **Sizing** (`sizing.py`): attractiveness = conviction × min(reward/risk, 3); weights ∝ attractiveness, clamped 4-20%; ≤10 positions; 10% cash reserve; entry needs conviction ≥ 55 (raised from 45 per the 2026-04-15 backtest; provisional) and price targets
+- **Sizing** (`sizing.py`): attractiveness = conviction × min(reward/risk, 3); weights ∝ attractiveness, clamped 4-20%; ≤10 positions; 10% cash reserve; entry needs conviction ≥ 55 (raised from 45 per the 2026-04-15 backtest; provisional) and price targets; max 5 new-position buys per ISO week (incl. swap buys; counted from `output/trade_log.json` via `trade_log.py`, enforced in both sizing and execute)
 - **Stops** (equal-risk): trail% = 1.5% of equity ÷ weight, clamped 6-25% — bigger position, tighter stop; ~1.5% equity at risk per position
 - **Rebalancing** (buy-only + swap): holdings never trimmed; new candidate needs free cash or attractiveness ≥ 1.2× the weakest holding (which gets sold)
 - **Stop-outs**: position gone from Alpaca → watchlist `stopped_out`, 30-day cooldown; fresh `/research` resets it
@@ -68,7 +68,7 @@ Five scheduled cloud Claude Code sessions execute the workflow files in `routine
 | 16:00 | `eod.md` | Daily recap (`portfolio/snapshot.py`) + fill tracking horizons (`research/tracking.py update`) |
 | 16:30 Fri | `weekly.md` | Week review + grade (`portfolio/grade.py`: 60% vs SPY, 40% process) + conviction-cutoff sweep (`research/tracking.py analyze`, report-only) |
 
-**Two-repo layout**: this repo (public) = code only; private repo `apm-v2-data` is cloned at `output/` and holds all state (watchlist, runs, weekly). Routines pull it at start, commit+push it at end, and never push the code repo. `output/` is fully gitignored here — no linkage to the private repo may appear in public code. Holiday guard: `python -m portfolio.market_check` (exit 3 = closed, skip day). Notifications: `portfolio/notify.py` no-ops until DISCORD_WEBHOOK_URL is set.
+**Two-repo layout**: this repo (public) = code only; private repo `apm-v2-data` is cloned at `output/` and holds all state (watchlist, runs, weekly). Routines pull it at start, commit+push it at end, and never push the code repo. `output/` is fully gitignored here — no linkage to the private repo may appear in public code. Holiday guard: `python -m portfolio.market_check` (exit 3 = closed, skip day). Notifications: `portfolio/notify.py` posts to the Discord webhook in `DISCORD_WEBHOOK_URL` (`.env` locally; must also be set in the cloud session env — a real env var wins over `.env`). `send()` returns True on delivery and never raises: unset URL, empty text, or a failed POST print a `[notify …]` line and return False, so a notification can't abort a routine. Test with `python -m portfolio.notify "message"`.
 
 Output per run: `output/runs/YYYY-MM-DD/` — `ideas.json`, plus exactly two files per ticker: `<TICKER>.json` (scores + conviction + meta) and `<TICKER>.md` (report). Watchlist: `output/watchlist.json`; conviction tracking: `output/conviction_tracking.json` + `output/conviction_analysis.json` (tracked in git; run dirs are gitignored). All state on disk so any future session or routine resumes cleanly.
 

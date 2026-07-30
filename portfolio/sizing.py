@@ -14,7 +14,7 @@ from datetime import date
 
 from research import watchlist
 
-from . import config
+from . import config, trade_log
 
 
 def attractiveness(entry: dict) -> float | None:
@@ -33,7 +33,8 @@ def trail_pct(weight: float) -> float:
     return round(max(lo, min(hi, config.RISK_BUDGET / weight * 100)), 1)
 
 
-def build_plan(candidates: list[dict], held: dict[str, float], equity: float, cash: float) -> dict:
+def build_plan(candidates: list[dict], held: dict[str, float], equity: float, cash: float,
+               max_new_buys: int | None = None) -> dict:
     """candidates: eligible watchlist entries. held: ticker -> current weight.
     Returns plan dict with buy/sell/hold/skip actions.
 
@@ -41,6 +42,9 @@ def build_plan(candidates: list[dict], held: dict[str, float], equity: float, ca
     free cash (above the MIN_CASH reserve); when cash or position slots run
     out, a candidate may displace the weakest holding if its attractiveness
     beats it by SWAP_MARGIN.
+
+    max_new_buys: remaining weekly trade budget — every buy (free-cash or
+    swap-funded) consumes one; further candidates are skipped. None = no cap.
     """
     actions = []
     skips = []
@@ -75,7 +79,14 @@ def build_plan(candidates: list[dict], held: dict[str, float], equity: float, ca
     slots = config.MAX_POSITIONS - len(held)
     total_attract = sum(e["attract"] for e in scored)
 
+    buys_left = max_new_buys
+
     for e in scored:
+        if buys_left is not None and buys_left <= 0:
+            skips.append({"ticker": e["ticker"],
+                          "reason": f"weekly trade cap reached ({config.MAX_NEW_TRADES_PER_WEEK}/wk)"})
+            continue
+
         raw_weight = (e["attract"] / total_attract) if total_attract else 0.0
         weight = max(config.MIN_WEIGHT, min(config.MAX_WEIGHT, raw_weight))
         dollars = weight * equity
@@ -84,6 +95,8 @@ def build_plan(candidates: list[dict], held: dict[str, float], equity: float, ca
             actions.append(_buy(e, weight, dollars))
             deployable -= dollars
             slots -= 1
+            if buys_left is not None:
+                buys_left -= 1
             continue
 
         # No room — try displacing the weakest holding
@@ -102,6 +115,8 @@ def build_plan(candidates: list[dict], held: dict[str, float], equity: float, ca
                 actions.append(buy)
                 deployable = max(0.0, deployable + freed - weight * equity)
                 del held_attract[swap_out]
+                if buys_left is not None:
+                    buys_left -= 1
                 continue
 
         reason = "cash below reserve" if slots > 0 else "portfolio full"
@@ -149,13 +164,15 @@ def main() -> None:
 
     candidates = watchlist.eligible(config.COOLDOWN_DAYS)
     candidates = [c for c in candidates if c["ticker"] not in held]
-    plan = build_plan(candidates, held, equity, cash)
+    buys_left = trade_log.remaining_this_week()
+    plan = build_plan(candidates, held, equity, cash, max_new_buys=buys_left)
 
     run_dir = config.RUNS_DIR / date.today().isoformat()
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "allocation_plan.json").write_text(json.dumps(plan, indent=2))
 
-    print(f"equity ${equity:,.0f}  cash ${cash:,.0f}\n")
+    print(f"equity ${equity:,.0f}  cash ${cash:,.0f}  "
+          f"weekly buys left {buys_left}/{config.MAX_NEW_TRADES_PER_WEEK}\n")
     for a in plan["actions"]:
         if a["action"] == "buy":
             print(f"  BUY  {a['ticker']:<6} {a['weight']*100:>5.1f}%  ${a['dollars']:>10,.0f}  "

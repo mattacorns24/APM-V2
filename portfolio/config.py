@@ -7,6 +7,10 @@ from research.config import OUTPUT_DIR, RUNS_DIR  # noqa: F401 (shared paths)
 # band underperformed; provisional until live tracking confirms (~20 entries)
 ENTRY_THRESHOLD = 55          # minimum conviction to be a candidate
 
+# Weekly trade cap: at most this many new-position buys (including swap-funded
+# buys) per ISO week (Monday reset). Counted from output/trade_log.json.
+MAX_NEW_TRADES_PER_WEEK = 5
+
 # Sizing: attractiveness = conviction * min(reward_risk, ATTRACT_RR_CAP);
 # weights proportional to attractiveness, clamped below.
 ATTRACT_RR_CAP = 3.0
